@@ -13,22 +13,35 @@ jobs:
       - name: Create 50 Dummy Repositories
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
-          ORG_NAME: "your-github-username"  # Change to your GitHub username or org
+          ORG_NAME: "lalitsudhakar"  # Change this to your GitHub username or org name
         run: |
           for i in $(seq 1 50); do
             REPO_NAME="dummy-repo-$i"
             echo "Creating repository: $REPO_NAME"
 
-            # Create a private repository
-            curl -s -X POST -H "Authorization: token $GH_TOKEN" \
-              -H "Accept: application/vnd.github.v3+json" \
-              https://api.github.com/orgs/$ORG_NAME/repos \
-              -d "{\"name\": \"$REPO_NAME\", \"private\": true}" > /dev/null
+            # Determine API URL (personal account vs organization)
+            API_URL="https://api.github.com/orgs/$ORG_NAME/repos"
 
-            # Clone, create branches, and push sample code
+            # Create repository
+            RESPONSE=$(curl -s -X POST -H "Authorization: token $GH_TOKEN" \
+              -H "Accept: application/vnd.github.v3+json" \
+              $API_URL -d "{\"name\": \"$REPO_NAME\", \"private\": true}")
+
+            # Check if the repository was created successfully
+            if echo "$RESPONSE" | jq -e 'has("id")' > /dev/null; then
+              echo "Repository $REPO_NAME created successfully."
+            else
+              echo "Error creating repository: $RESPONSE"
+              exit 1
+            fi
+
+            sleep 5  # Wait for GitHub to register repo
+
+            # Clone repository securely
             git clone "https://$GH_TOKEN@github.com/$ORG_NAME/$REPO_NAME.git"
             cd $REPO_NAME
 
+            # Create branches and add sample code
             for BRANCH in "Test-Github" "Docker-Dev" "Prod" "Stage"; do
               git checkout --orphan $BRANCH
               echo "print('Hello from $BRANCH branch')" > sample.py
