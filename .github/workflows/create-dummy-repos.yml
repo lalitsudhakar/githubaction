@@ -1,7 +1,7 @@
 name: Create Dummy Repos
 
 on:
-  workflow_dispatch:
+  workflow_dispatch:  # Allows manual trigger from GitHub Actions
 
 jobs:
   create_repos:
@@ -13,39 +13,22 @@ jobs:
       - name: Create 50 Dummy Repositories
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
-          ORG_NAME: "lalitsudhakar"  # Change this to your GitHub username or org name
+          ORG_NAME: "your-github-username"  # Change to your GitHub username or org
         run: |
           for i in $(seq 1 50); do
             REPO_NAME="dummy-repo-$i"
             echo "Creating repository: $REPO_NAME"
 
-            # Determine API URL (personal account vs organization)
-            if [ "$ORG_NAME" == "your-github-username" ]; then
-              API_URL="https://api.github.com/user/repos"
-            else
-              API_URL="https://api.github.com/orgs/$ORG_NAME/repos"
-            fi
-
-            # Create repository
-            RESPONSE=$(curl -s -X POST -H "Authorization: token $GH_TOKEN" \
+            # Create a private repository
+            curl -s -X POST -H "Authorization: token $GH_TOKEN" \
               -H "Accept: application/vnd.github.v3+json" \
-              $API_URL -d "{\"name\": \"$REPO_NAME\", \"private\": true}")
+              https://api.github.com/orgs/$ORG_NAME/repos \
+              -d "{\"name\": \"$REPO_NAME\", \"private\": true}" > /dev/null
 
-            # Check for errors
-            if echo "$RESPONSE" | jq -e 'has("id")' > /dev/null; then
-              echo "Repository $REPO_NAME created successfully."
-            else
-              echo "Error creating repository: $RESPONSE"
-              exit 1
-            fi
-
-            sleep 5  # Wait for GitHub to register repo
-
-            # Clone repository securely
+            # Clone, create branches, and push sample code
             git clone "https://$GH_TOKEN@github.com/$ORG_NAME/$REPO_NAME.git"
             cd $REPO_NAME
 
-            # Create branches and add sample code
             for BRANCH in "Test-Github" "Docker-Dev" "Prod" "Stage"; do
               git checkout --orphan $BRANCH
               echo "print('Hello from $BRANCH branch')" > sample.py
