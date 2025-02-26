@@ -1,7 +1,7 @@
 name: Create Private Dummy Repositories
 
 on:
-  workflow_dispatch:  # Allows manual trigger
+  workflow_dispatch:
 
 jobs:
   create_private_repos:
@@ -11,19 +11,27 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v3
 
-      - name: Create 50 Private Repositories
+      - name: Create Private Repositories with Rate Limit Handling
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
           ORG_NAME: "lalitsudhakar"  # Change if using an organization
         run: |
+          max_attempts=5
+
           for i in $(seq 1 50); do
             REPO_NAME="private-dummy-repo-$i"
             echo "Creating private repository: $REPO_NAME"
 
-            curl -X POST -H "Authorization: token $GH_TOKEN" \
-              -H "Accept: application/vnd.github.v3+json" \
-              https://api.github.com/user/repos \
-              -d '{"name":"'"$REPO_NAME"'", "private":true}'
+            attempt=1
+            while [[ $attempt -le $max_attempts ]]; do
+              response=$(curl -s -o response.json -w "%{http_code}" -X POST \
+                -H "Authorization: token $GH_TOKEN" \
+                -H "Accept: application/vnd.github.v3+json" \
+                https://api.github.com/user/repos \
+                -d '{"name":"'"$REPO_NAME"'", "private":true}')
 
-            sleep 2  # Prevent rate limiting
-          done
+              if [[ $response -eq 201 ]]; then
+                echo "Repository $REPO_NAME created successfully!"
+                break
+              elif [[ $response -eq 403 ]]; then
+                echo "Rate limit hit, retr
