@@ -1,83 +1,92 @@
-name: Create Public Dummy Repository
+name: Create Public Dummy Repo
 
 on:
-  workflow_dispatch:  # Allows manual trigger
+  workflow_dispatch:  # Allows manual trigger from GitHub Actions
 
 jobs:
-  create_repos:
+  create_repo:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Create Dummy Repository
+      - name: Set Up Environment
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
-          ORG_NAME: ${{ secrets.ORG_NAME }}  # GitHub username or organization
+          ORG_NAME: ${{ secrets.ORG_NAME }}
+          REPO_NAME: "dummy-repo"
         run: |
-          REPO_NAME="dummy-repo"  # Fixed repo name
-          echo "Processing repository: $REPO_NAME"
+          echo "Using Organization: $ORG_NAME"
+          echo "Repo to create: $REPO_NAME"
 
-          # Ensure ORG_NAME is set
-          if [ -z "$ORG_NAME" ]; then
-            echo "Error: ORG_NAME is not set!"
-            exit 1
-          fi
-
-          # Check if the repository already exists
-          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: token $GH_TOKEN" \
+      - name: Delete Existing Repository (if exists)
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          ORG_NAME: ${{ secrets.ORG_NAME }}
+          REPO_NAME: "dummy-repo"
+        run: |
+          response=$(curl -s -o /dev/null -w "%{http_code}" -X GET \
+            -H "Authorization: token $GH_TOKEN" \
             -H "Accept: application/vnd.github.v3+json" \
             https://api.github.com/repos/$ORG_NAME/$REPO_NAME)
 
-          if [ "$RESPONSE" -eq 200 ]; then
-            echo "Repository $REPO_NAME already exists. Deleting..."
+          if [ "$response" -eq 200 ]; then
+            echo "Repository already exists. Deleting..."
             curl -X DELETE -H "Authorization: token $GH_TOKEN" \
               -H "Accept: application/vnd.github.v3+json" \
               https://api.github.com/repos/$ORG_NAME/$REPO_NAME
-            sleep 5  # Wait before recreating
-          fi
-
-          # Create the repository (Public)
-          echo "Creating repository: $REPO_NAME"
-          CREATE_RESPONSE=$(curl -s -X POST -H "Authorization: token $GH_TOKEN" \
-            -H "Accept: application/vnd.github.v3+json" \
-            https://api.github.com/user/repos \
-            -d '{"name":"'"$REPO_NAME"'", "private":false}')
-
-          # Check if repo creation was successful
-          if echo "$CREATE_RESPONSE" | grep -q '"id":'; then
-            echo "Repository $REPO_NAME created successfully."
+            sleep 5  # Wait to ensure deletion is processed
           else
-            echo "Error creating repository: $CREATE_RESPONSE"
-            exit 1
+            echo "Repository does not exist, proceeding to create it."
           fi
 
-          sleep 5  # Prevent rate limiting
+      - name: Create Public Repository
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          ORG_NAME: ${{ secrets.ORG_NAME }}
+          REPO_NAME: "dummy-repo"
+        run: |
+          curl -X POST -H "Authorization: token $GH_TOKEN" \
+            -H "Accept: application/vnd.github.v3+json" \
+            https://api.github.com/orgs/$ORG_NAME/repos \
+            -d '{
+              "name": "'"$REPO_NAME"'",
+              "private": false,
+              "auto_init": true
+            }'
+          sleep 5  # Give some time for the repository to be available
 
-          # Define Python script content (base64 encode for API)
-          PYTHON_SCRIPT=$(echo 'print("Hello from GitHub Actions!")' | base64)
+      - name: Add Branches & Push Sample Code
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          ORG_NAME: ${{ secrets.ORG_NAME }}
+          REPO_NAME: "dummy-repo"
+        run: |
+          BRANCHES=("Test-Github" "Docker-Dev" "Prod" "Stage")
 
-          # Create multiple branches and add sample.py
-          for BRANCH in Test-Github Docker-Dev Prod Stage; do
+          for BRANCH in "${BRANCHES[@]}"; do
             echo "Creating branch: $BRANCH"
 
-            # Create an empty commit on the default branch (if needed)
-            curl -X PUT -H "Authorization: token $GH_TOKEN" \
-              -H "Accept: application/vnd.github.v3+json" \
-              "https://api.github.com/repos/$ORG_NAME/$REPO_NAME/contents/sample.py" \
-              -d '{"message": "Initial commit", "content": "'"$PYTHON_SCRIPT"'", "branch": "main"}'
-
-            # Create new branch from main
+            # Create a new branch via GitHub API
             curl -X POST -H "Authorization: token $GH_TOKEN" \
               -H "Accept: application/vnd.github.v3+json" \
-              "https://api.github.com/repos/$ORG_NAME/$REPO_NAME/git/refs" \
-              -d '{"ref": "refs/heads/'"$BRANCH"'", "sha": "'"$(curl -s -H "Authorization: token $GH_TOKEN" \
-              -H "Accept: application/vnd.github.v3+json" \
-              "https://api.github.com/repos/$ORG_NAME/$REPO_NAME/git/refs/heads/main" | jq -r '.object.sha')"'"}'
+              https://api.github.com/repos/$ORG_NAME/$REPO_NAME/git/refs \
+              -d '{
+                "ref": "refs/heads/'"$BRANCH"'",
+                "sha": "'$(curl -s -H "Authorization: token $GH_TOKEN" \
+                    -H "Accept: application/vnd.github.v3+json" \
+                    https://api.github.com/repos/$ORG_NAME/$REPO_NAME/git/refs/heads/main \
+                    | jq -r '.object.sha')'"
+              }'
 
-            # Add the sample Python file to the new branch
+            # Add a sample Python file via GitHub API
             curl -X PUT -H "Authorization: token $GH_TOKEN" \
               -H "Accept: application/vnd.github.v3+json" \
-              "https://api.github.com/repos/$ORG_NAME/$REPO_NAME/contents/sample.py" \
-              -d '{"message": "Added sample script", "content": "'"$PYTHON_SCRIPT"'", "branch": "'"$BRANCH"'"}'
-
-            echo "Branch $BRANCH setup complete."
+              https://api.github.com/repos/$ORG_NAME/$REPO_NAME/contents/sample.py \
+              -d '{
+                "message": "Add sample Python code",
+                "content": "'"$(echo -n 'print(\"Hello from '"$BRANCH"'\")' | base64)"'",
+                "branch": "'"$BRANCH"'"
+              }'
           done
+
+      - name: Success Message
+        run: echo "Public repository 'dummy-repo' with all branches and sample code created successfully!"
