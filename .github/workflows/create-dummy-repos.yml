@@ -1,92 +1,66 @@
-name: Create Public Dummy Repo
+name: Create Dummy Repository
 
 on:
-  workflow_dispatch:  # Allows manual trigger from GitHub Actions
+  workflow_dispatch:  # Allows manual trigger
 
 jobs:
   create_repo:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Set Up Environment
-        env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
-          ORG_NAME: ${{ secrets.ORG_NAME }}
-          REPO_NAME: "dummy-repo"
-        run: |
-          echo "Using Organization: $ORG_NAME"
-          echo "Repo to create: $REPO_NAME"
+      - name: Checkout Repository
+        uses: actions/checkout@v3
 
-      - name: Delete Existing Repository (if exists)
+      - name: Setup Git Config
+        run: |
+          git config --global user.email "lalittanysudhakar@gmail.com"
+          git config --global user.name "lalitsudhakar"
+
+      - name: Delete existing repo (if exists)
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
-          ORG_NAME: ${{ secrets.ORG_NAME }}
+          ORG_NAME: "lalitsudhakar"
           REPO_NAME: "dummy-repo"
         run: |
-          response=$(curl -s -o /dev/null -w "%{http_code}" -X GET \
+          response=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE \
             -H "Authorization: token $GH_TOKEN" \
             -H "Accept: application/vnd.github.v3+json" \
             https://api.github.com/repos/$ORG_NAME/$REPO_NAME)
 
-          if [ "$response" -eq 200 ]; then
-            echo "Repository already exists. Deleting..."
-            curl -X DELETE -H "Authorization: token $GH_TOKEN" \
-              -H "Accept: application/vnd.github.v3+json" \
-              https://api.github.com/repos/$ORG_NAME/$REPO_NAME
-            sleep 5  # Wait to ensure deletion is processed
+          if [[ "$response" == "204" ]]; then
+            echo "Existing repository deleted successfully."
           else
-            echo "Repository does not exist, proceeding to create it."
+            echo "No existing repository found or failed to delete."
           fi
+          sleep 2
 
-      - name: Create Public Repository
+      - name: Create a new repository
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
-          ORG_NAME: ${{ secrets.ORG_NAME }}
+          ORG_NAME: "lalitsudhakar"
           REPO_NAME: "dummy-repo"
         run: |
           curl -X POST -H "Authorization: token $GH_TOKEN" \
             -H "Accept: application/vnd.github.v3+json" \
-            https://api.github.com/orgs/$ORG_NAME/repos \
-            -d '{
-              "name": "'"$REPO_NAME"'",
-              "private": false,
-              "auto_init": true
-            }'
-          sleep 5  # Give some time for the repository to be available
+            https://api.github.com/user/repos \
+            -d '{"name": "'"$REPO_NAME"'", "private": false}'
+          sleep 2
 
-      - name: Add Branches & Push Sample Code
+      - name: Initialize repository and add branches
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
-          ORG_NAME: ${{ secrets.ORG_NAME }}
+          ORG_NAME: "lalitsudhakar"
           REPO_NAME: "dummy-repo"
         run: |
-          BRANCHES=("Test-Github" "Docker-Dev" "Prod" "Stage")
+          git clone https://github.com/$ORG_NAME/$REPO_NAME.git
+          cd $REPO_NAME
 
-          for BRANCH in "${BRANCHES[@]}"; do
-            echo "Creating branch: $BRANCH"
+          echo 'print("Hello from Dummy Repo")' > main.py
+          git add main.py
+          git commit -m "Add dummy Python script"
+          git push origin main
 
-            # Create a new branch via GitHub API
-            curl -X POST -H "Authorization: token $GH_TOKEN" \
-              -H "Accept: application/vnd.github.v3+json" \
-              https://api.github.com/repos/$ORG_NAME/$REPO_NAME/git/refs \
-              -d '{
-                "ref": "refs/heads/'"$BRANCH"'",
-                "sha": "'$(curl -s -H "Authorization: token $GH_TOKEN" \
-                    -H "Accept: application/vnd.github.v3+json" \
-                    https://api.github.com/repos/$ORG_NAME/$REPO_NAME/git/refs/heads/main \
-                    | jq -r '.object.sha')'"
-              }'
-
-            # Add a sample Python file via GitHub API
-            curl -X PUT -H "Authorization: token $GH_TOKEN" \
-              -H "Accept: application/vnd.github.v3+json" \
-              https://api.github.com/repos/$ORG_NAME/$REPO_NAME/contents/sample.py \
-              -d '{
-                "message": "Add sample Python code",
-                "content": "'"$(echo -n 'print(\"Hello from '"$BRANCH"'\")' | base64)"'",
-                "branch": "'"$BRANCH"'"
-              }'
+          for branch in "Test-Github" "Docker-Dev" "Prod" "Stage"; do
+            git checkout -b $branch
+            git push origin $branch
           done
-
-      - name: Success Message
-        run: echo "Public repository 'dummy-repo' with all branches and sample code created successfully!"
