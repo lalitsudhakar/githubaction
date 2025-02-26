@@ -34,4 +34,16 @@ jobs:
                 echo "Repository $REPO_NAME created successfully!"
                 break
               elif [[ $response -eq 403 ]]; then
-                echo "Rate limit hit, retrying in 30 seconds... (Attempt $attempt/$max_atte
+                echo "Rate limit hit, retrying in 30 seconds... (Attempt $attempt/$max_attempts)"
+                sleep 30
+              else
+                echo "Failed to create repository $REPO_NAME. HTTP Status: $response"
+                cat response.json
+                break
+              fi
+
+              ((attempt++))
+            done
+
+            sleep 10  # Prevent hitting rate limits
+          done
