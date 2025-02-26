@@ -11,6 +11,9 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      - name: Install Git & jq
+        run: sudo apt-get update && sudo apt-get install -y jq git
+
       - name: Create 50 Dummy Repositories
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
@@ -20,10 +23,35 @@ jobs:
             REPO_NAME="dummy-repo-$i"
             echo "Creating repository: $REPO_NAME"
 
-            curl -X POST -H "Authorization: token $GH_TOKEN" \
+            # Create repository
+            RESPONSE=$(curl -s -X POST -H "Authorization: token $GH_TOKEN" \
               -H "Accept: application/vnd.github.v3+json" \
               https://api.github.com/user/repos \
-              -d '{"name":"'"$REPO_NAME"'", "private":true}'
+              -d "{\"name\":\"$REPO_NAME\", \"private\":true}")
+
+            # Check if repo creation was successful
+            if echo "$RESPONSE" | jq -e 'has("id")' > /dev/null; then
+              echo "Repository $REPO_NAME created successfully."
+            else
+              echo "Error creating repository: $RESPONSE"
+              exit 1
+            fi
 
             sleep 2  # Prevent rate limiting
+
+            # Clone the new repository
+            git clone "https://$GH_TOKEN@github.com/$ORG_NAME/$REPO_NAME.git"
+            cd $REPO_NAME
+
+            # Create branches and push sample code
+            for BRANCH in "Test-Github" "Docker-Dev" "Prod" "Stage"; do
+              git checkout --orphan $BRANCH
+              echo "print('Hello from $BRANCH branch')" > sample.py
+              git add sample.py
+              git commit -m "Added sample code to $BRANCH"
+              git push origin $BRANCH
+            done
+
+            cd ..
+            rm -rf $REPO_NAME  # Cleanup local repo
           done
