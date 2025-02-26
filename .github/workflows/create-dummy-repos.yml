@@ -1,7 +1,7 @@
 name: Create Dummy Repos
 
 on:
-  workflow_dispatch:  # Allows manual trigger from GitHub Actions
+  workflow_dispatch:
 
 jobs:
   create_repos:
@@ -20,14 +20,18 @@ jobs:
             echo "Creating repository: $REPO_NAME"
 
             # Determine API URL (personal account vs organization)
-            API_URL="https://api.github.com/orgs/$ORG_NAME/repos"
+            if [ "$ORG_NAME" == "your-github-username" ]; then
+              API_URL="https://api.github.com/user/repos"
+            else
+              API_URL="https://api.github.com/orgs/$ORG_NAME/repos"
+            fi
 
             # Create repository
             RESPONSE=$(curl -s -X POST -H "Authorization: token $GH_TOKEN" \
               -H "Accept: application/vnd.github.v3+json" \
               $API_URL -d "{\"name\": \"$REPO_NAME\", \"private\": true}")
 
-            # Check if the repository was created successfully
+            # Check for errors
             if echo "$RESPONSE" | jq -e 'has("id")' > /dev/null; then
               echo "Repository $REPO_NAME created successfully."
             else
