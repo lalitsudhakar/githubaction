@@ -52,7 +52,7 @@ jobs:
           ORG_NAME: "lalitsudhakar"
           REPO_NAME: "dummy-repo"
         run: |
-          git clone https://github.com/$ORG_NAME/$REPO_NAME.git
+          git clone https://$GH_TOKEN@github.com/$ORG_NAME/$REPO_NAME.git
           cd $REPO_NAME
 
           echo 'print("Hello from Dummy Repo")' > main.py
