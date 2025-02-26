@@ -1,4 +1,4 @@
-name: Create Unique Dummy Repositories
+name: Create Dummy Repositories
 
 on:
   workflow_dispatch:  # Allows manual trigger from GitHub Actions
@@ -16,23 +16,35 @@ jobs:
           git config --global user.email "your-email@example.com"
           git config --global user.name "GitHub Actions Bot"
 
-      - name: Create 50 Unique Dummy Repositories
+      - name: Create 50 Dummy Repositories
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
-          ORG_NAME: "lalitsudhakar"  # Change if using an organization
+          ORG_NAME: ${{ secrets.ORG_NAME }}  # GitHub username or organization
         run: |
           for i in $(seq 1 50); do
-            TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-            REPO_NAME="dummy-repo-$TIMESTAMP-$i"
-            echo "Creating repository: $REPO_NAME"
+            REPO_NAME="dummy-repo"  # Fixed repo name
+            echo "Processing repository: $REPO_NAME"
 
-            # Create the repository
+            # Check if repository already exists
+            RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: token $GH_TOKEN" \
+              -H "Accept: application/vnd.github.v3+json" \
+              https://api.github.com/repos/$ORG_NAME/$REPO_NAME)
+
+            if [ "$RESPONSE" -eq 200 ]; then
+              echo "Repository $REPO_NAME already exists. Deleting..."
+              curl -X DELETE -H "Authorization: token $GH_TOKEN" \
+                -H "Accept: application/vnd.github.v3+json" \
+                https://api.github.com/repos/$ORG_NAME/$REPO_NAME
+              sleep 5  # Wait before recreating
+            fi
+
+            echo "Creating repository: $REPO_NAME"
             curl -X POST -H "Authorization: token $GH_TOKEN" \
               -H "Accept: application/vnd.github.v3+json" \
               https://api.github.com/orgs/$ORG_NAME/repos \
               -d '{"name":"'"$REPO_NAME"'", "private":true}'
 
-            sleep 2  # Prevent rate limiting
+            sleep 5  # Prevent rate limiting
 
             # Clone and initialize the repository
             git clone "https://$GH_TOKEN@github.com/$ORG_NAME/$REPO_NAME.git"
