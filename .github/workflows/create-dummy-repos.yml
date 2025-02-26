@@ -1,4 +1,4 @@
-name: Create Dummy Repositories
+name: Create Dummy Repositories with Branches
 
 on:
   workflow_dispatch:  # Allows manual trigger
@@ -19,8 +19,14 @@ jobs:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
           ORG_NAME: "lalitsudhakar"  # Change if using an organization
         run: |
+          # Define branch names
+          BRANCHES=("Test-Github" "Docker-Dev" "Prod" "Stage")
+
           for i in $(seq 1 50); do
-            REPO_NAME="dummy-repo-$i"
+            BRANCH_INDEX=$(( (i - 1) % 4 ))  # Rotate through 4 branches
+            BRANCH_NAME=${BRANCHES[$BRANCH_INDEX]}
+            REPO_NAME="dummy-repo-$BRANCH_NAME"
+
             echo "Creating repository: $REPO_NAME"
 
             # Create repository
@@ -43,14 +49,12 @@ jobs:
             git clone "https://$GH_TOKEN@github.com/$ORG_NAME/$REPO_NAME.git"
             cd $REPO_NAME
 
-            # Create branches and push sample code
-            for BRANCH in "Test-Github" "Docker-Dev" "Prod" "Stage"; do
-              git checkout --orphan $BRANCH
-              echo "print('Hello from $BRANCH branch')" > sample.py
-              git add sample.py
-              git commit -m "Added sample code to $BRANCH"
-              git push origin $BRANCH
-            done
+            # Create the assigned branch and push sample code
+            git checkout --orphan $BRANCH_NAME
+            echo "print('Hello from $BRANCH_NAME branch')" > sample.py
+            git add sample.py
+            git commit -m "Added sample code to $BRANCH_NAME"
+            git push origin $BRANCH_NAME
 
             cd ..
             rm -rf $REPO_NAME  # Cleanup local repo
