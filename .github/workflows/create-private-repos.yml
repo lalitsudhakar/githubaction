@@ -1,0 +1,29 @@
+name: Create Private Dummy Repositories
+
+on:
+  workflow_dispatch:  # Allows manual trigger
+
+jobs:
+  create_private_repos:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Create 50 Private Repositories
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          ORG_NAME: "lalitsudhakar"  # Change if using an organization
+        run: |
+          for i in $(seq 1 50); do
+            REPO_NAME="private-dummy-repo-$i"
+            echo "Creating private repository: $REPO_NAME"
+
+            curl -X POST -H "Authorization: token $GH_TOKEN" \
+              -H "Accept: application/vnd.github.v3+json" \
+              https://api.github.com/user/repos \
+              -d '{"name":"'"$REPO_NAME"'", "private":true}'
+
+            sleep 2  # Prevent rate limiting
+          done
