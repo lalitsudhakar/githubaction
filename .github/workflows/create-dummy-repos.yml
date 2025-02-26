@@ -1,21 +1,13 @@
 name: Create Public Dummy Repository
 
 on:
-  workflow_dispatch:  # Allows manual trigger from GitHub Actions
+  workflow_dispatch:  # Allows manual trigger
 
 jobs:
   create_repos:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v3
-
-      - name: Configure Git User
-        run: |
-          git config --global user.email "your-email@example.com"
-          git config --global user.name "GitHub Actions Bot"
-
       - name: Create Dummy Repository
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
@@ -24,7 +16,13 @@ jobs:
           REPO_NAME="dummy-repo"  # Fixed repo name
           echo "Processing repository: $REPO_NAME"
 
-          # Check if repository already exists
+          # Ensure ORG_NAME is set
+          if [ -z "$ORG_NAME" ]; then
+            echo "Error: ORG_NAME is not set!"
+            exit 1
+          fi
+
+          # Check if the repository already exists
           RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: token $GH_TOKEN" \
             -H "Accept: application/vnd.github.v3+json" \
             https://api.github.com/repos/$ORG_NAME/$REPO_NAME)
@@ -37,29 +35,49 @@ jobs:
             sleep 5  # Wait before recreating
           fi
 
+          # Create the repository (Public)
           echo "Creating repository: $REPO_NAME"
-          curl -X POST -H "Authorization: token $GH_TOKEN" \
+          CREATE_RESPONSE=$(curl -s -X POST -H "Authorization: token $GH_TOKEN" \
             -H "Accept: application/vnd.github.v3+json" \
-            https://api.github.com/orgs/$ORG_NAME/repos \
-            -d '{"name":"'"$REPO_NAME"'", "private":false}'
+            https://api.github.com/user/repos \
+            -d '{"name":"'"$REPO_NAME"'", "private":false}')
+
+          # Check if repo creation was successful
+          if echo "$CREATE_RESPONSE" | grep -q '"id":'; then
+            echo "Repository $REPO_NAME created successfully."
+          else
+            echo "Error creating repository: $CREATE_RESPONSE"
+            exit 1
+          fi
 
           sleep 5  # Prevent rate limiting
 
-          # Clone and initialize the repository
-          git clone "https://$GH_TOKEN@github.com/$ORG_NAME/$REPO_NAME.git"
-          cd $REPO_NAME
+          # Define Python script content (base64 encode for API)
+          PYTHON_SCRIPT=$(echo 'print("Hello from GitHub Actions!")' | base64)
 
-          # Define the Python script
-          echo "print('Hello from GitHub Actions!')" > sample.py
-
-          # Create branches and push the same Python code to all branches
+          # Create multiple branches and add sample.py
           for BRANCH in Test-Github Docker-Dev Prod Stage; do
-            git checkout -b $BRANCH
-            cp sample.py sample_$BRANCH.py  # Ensure branch-specific file exists
-            git add sample.py sample_$BRANCH.py
-            git commit -m "Added sample Python script to $BRANCH"
-            git push origin $BRANCH
-          done
+            echo "Creating branch: $BRANCH"
 
-          cd ..
-          rm -rf $REPO_NAME  # Cleanup local copy
+            # Create an empty commit on the default branch (if needed)
+            curl -X PUT -H "Authorization: token $GH_TOKEN" \
+              -H "Accept: application/vnd.github.v3+json" \
+              "https://api.github.com/repos/$ORG_NAME/$REPO_NAME/contents/sample.py" \
+              -d '{"message": "Initial commit", "content": "'"$PYTHON_SCRIPT"'", "branch": "main"}'
+
+            # Create new branch from main
+            curl -X POST -H "Authorization: token $GH_TOKEN" \
+              -H "Accept: application/vnd.github.v3+json" \
+              "https://api.github.com/repos/$ORG_NAME/$REPO_NAME/git/refs" \
+              -d '{"ref": "refs/heads/'"$BRANCH"'", "sha": "'"$(curl -s -H "Authorization: token $GH_TOKEN" \
+              -H "Accept: application/vnd.github.v3+json" \
+              "https://api.github.com/repos/$ORG_NAME/$REPO_NAME/git/refs/heads/main" | jq -r '.object.sha')"'"}'
+
+            # Add the sample Python file to the new branch
+            curl -X PUT -H "Authorization: token $GH_TOKEN" \
+              -H "Accept: application/vnd.github.v3+json" \
+              "https://api.github.com/repos/$ORG_NAME/$REPO_NAME/contents/sample.py" \
+              -d '{"message": "Added sample script", "content": "'"$PYTHON_SCRIPT"'", "branch": "'"$BRANCH"'"}'
+
+            echo "Branch $BRANCH setup complete."
+          done
