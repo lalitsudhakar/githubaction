@@ -1,10 +1,10 @@
-name: Create Dummy Repository
+name: Create Multiple Dummy Repositories
 
 on:
   workflow_dispatch:  # Allows manual trigger
 
 jobs:
-  create_repo:
+  create_repos:
     runs-on: ubuntu-latest
 
     steps:
@@ -16,51 +16,51 @@ jobs:
           git config --global user.email "lalittanysudhakar@gmail.com"
           git config --global user.name "lalitsudhakar"
 
-      - name: Delete existing repo (if exists)
+      - name: Create Multiple Dummy Repositories
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
           ORG_NAME: "lalitsudhakar"
-          REPO_NAME: "dummy-repo"
         run: |
-          response=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE \
-            -H "Authorization: token $GH_TOKEN" \
-            -H "Accept: application/vnd.github.v3+json" \
-            https://api.github.com/repos/$ORG_NAME/$REPO_NAME)
+          for i in $(seq 1 5); do  # Change 5 to any number of repos you need
+            REPO_NAME="dummy-repo-$i"
+            echo "Processing repository: $REPO_NAME"
 
-          if [[ "$response" == "204" ]]; then
-            echo "Existing repository deleted successfully."
-          else
-            echo "No existing repository found or failed to delete."
-          fi
-          sleep 2
+            # Delete the repo if it exists
+            response=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE \
+              -H "Authorization: token $GH_TOKEN" \
+              -H "Accept: application/vnd.github.v3+json" \
+              https://api.github.com/repos/$ORG_NAME/$REPO_NAME)
 
-      - name: Create a new repository
-        env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
-          ORG_NAME: "lalitsudhakar"
-          REPO_NAME: "dummy-repo"
-        run: |
-          curl -X POST -H "Authorization: token $GH_TOKEN" \
-            -H "Accept: application/vnd.github.v3+json" \
-            https://api.github.com/user/repos \
-            -d '{"name": "'"$REPO_NAME"'", "private": false}'
-          sleep 2
+            if [[ "$response" == "204" ]]; then
+              echo "Existing repository $REPO_NAME deleted successfully."
+            else
+              echo "No existing repository found or failed to delete $REPO_NAME."
+            fi
 
-      - name: Initialize repository and add branches
-        env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
-          ORG_NAME: "lalitsudhakar"
-          REPO_NAME: "dummy-repo"
-        run: |
-          git clone https://$GH_TOKEN@github.com/$ORG_NAME/$REPO_NAME.git
-          cd $REPO_NAME
+            sleep 2
 
-          echo 'print("Hello from Dummy Repo")' > main.py
-          git add main.py
-          git commit -m "Add dummy Python script"
-          git push origin main
+            # Create a new repository
+            curl -X POST -H "Authorization: token $GH_TOKEN" \
+              -H "Accept: application/vnd.github.v3+json" \
+              https://api.github.com/user/repos \
+              -d '{"name": "'"$REPO_NAME"'", "private": false}'
 
-          for branch in "Test-Github" "Docker-Dev" "Prod" "Stage"; do
-            git checkout -b $branch
-            git push origin $branch
+            sleep 2
+
+            # Initialize repository and add branches
+            git clone https://$GH_TOKEN@github.com/$ORG_NAME/$REPO_NAME.git
+            cd $REPO_NAME
+
+            echo 'print("Hello from Dummy Repo")' > main.py
+            git add main.py
+            git commit -m "Add dummy Python script"
+            git push origin main
+
+            for branch in "Test-Github" "Docker-Dev" "Prod" "Stage"; do
+              git checkout -b $branch
+              git push origin $branch
+            done
+
+            cd ..
+            rm -rf $REPO_NAME  # Clean up local repo
           done
