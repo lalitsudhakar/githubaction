@@ -47,8 +47,8 @@ jobs:
             # Create GitHub Actions workflow directory
             mkdir -p .github/workflows
 
-            # Create workflow file with proper YAML syntax
-            cat > .github/workflows/main.yml <<EOL
+            # Use EOF syntax to correctly format YAML in the workflow file
+            cat <<EOF > .github/workflows/main.yml
 name: CI for $REPO_NAME
 
 on:
@@ -63,13 +63,14 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
 
       - name: Run a simple script
         run: echo "Building $REPO_NAME on branch \$(git rev-parse --abbrev-ref HEAD)"
-EOL
+EOF
 
             git add .github/workflows/main.yml
             git commit -m "Add CI workflow for $REPO_NAME"
