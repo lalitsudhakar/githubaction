@@ -8,74 +8,58 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
       - name: Setup Git Config
         run: |
           git config --global user.email "lalittanysudhakar@gmail.com"
           git config --global user.name "lalitsudhakar"
 
-      - name: Create Repositories & Add Workflows
+      - name: Create Repositories and Add Workflows
         env:
-          GH_PAT: ${{ secrets.GH_PAT }}  # Use PAT with repo permissions
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
           ORG_NAME: "lalitsudhakar"
+          REPO_NAMES: "finance analytics automation security java python Business marketing"
+          BRANCH_NAMES: "Test-Github Docker-Dev Prod Stage"
         run: |
-          for i in $(seq 1 5); do  # Creates 5 repositories (Modify as needed)
-            REPO_NAME="dummy-repo-$i"
-            echo "Creating repository: $REPO_NAME"
+          REPO_LIST=($REPO_NAMES)
+          BRANCH_LIST=($BRANCH_NAMES)
 
-            # Create repository with error handling
-            RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
-              -H "Authorization: token $GH_PAT" \
+          for REPO_NAME in "${REPO_LIST[@]}"; do
+            echo "Processing repository: $REPO_NAME"
+
+            # Create a new repository
+            curl -X POST -H "Authorization: token $GH_TOKEN" \
               -H "Accept: application/vnd.github.v3+json" \
               https://api.github.com/user/repos \
-              -d "{\"name\": \"$REPO_NAME\", \"private\": false}")
-
-            if [[ "$RESPONSE" != "201" ]]; then
-              echo "❌ Failed to create repo: $REPO_NAME (HTTP $RESPONSE)"
-              continue  # Skip to the next repo
-            fi
+              -d '{"name": "'"$REPO_NAME"'", "private": false}'
 
             sleep 2
 
-            # Clone the repository
-            git clone https://$GH_PAT@github.com/$ORG_NAME/$REPO_NAME.git
+            # Initialize repository and add branches and workflows
+            git clone https://$GH_TOKEN@github.com/$ORG_NAME/$REPO_NAME.git
             cd $REPO_NAME
 
-            # Add a dummy Python script
-            echo 'print("Hello from Dummy Repo")' > main.py
+            echo 'print("Hello from Dummy Repo: $REPO_NAME")' > main.py
             git add main.py
             git commit -m "Add dummy Python script"
             git push origin main
 
-            # Create GitHub Actions workflow directory
-            mkdir -p .github/workflows
-
-            # Create and push branches with their own workflows
-            for branch in "main" "Test-Github" "Docker-Dev" "Prod" "Stage"; do
+            for branch in "${BRANCH_LIST[@]}"; do
               git checkout -b $branch
               git push origin $branch
+              echo "Adding workflow to branch: $branch"
 
-              # Define branch-specific workflow
-              echo "name: CI for $REPO_NAME ($branch)
+              WORKFLOW_CONTENT="# Workflow for branch: $branch\n\nname: Workflow-for-$branch\n\non:\n  push:\n    branches: [ $branch ]\n  workflow_dispatch:\n\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - name: Checkout code\n        uses: actions/checkout@v3\n      - name: Say Hello\n        run: echo 'Hello from branch $branch in $REPO_NAME repository!' "
 
-on:
-  push:
-    branches:
-      - $branch
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
-      - name: Run Script
-        run: echo \"Building $REPO_NAME on branch $branch\"
-" > .github/workflows/main-$branch.yml
-
-              git add .github/workflows/main-$branch.yml
-              git commit -m "Added CI workflow for $REPO_NAME ($branch)"
+              echo "$WORKFLOW_CONTENT" > .github/workflows/workflow-for-$branch.yml
+              git add .github/workflows/workflow-for-$branch.yml
+              git commit -m "Add workflow for $branch branch"
               git push origin $branch
+              git checkout main # Return to main branch before next branch
             done
+            git checkout main # Return to main branch after processing branches
 
             cd ..
             rm -rf $REPO_NAME  # Clean up local repo
