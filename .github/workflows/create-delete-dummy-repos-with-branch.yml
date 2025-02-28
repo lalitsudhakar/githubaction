@@ -1,4 +1,4 @@
-name: Create Multiple Dummy Repositories
+name: Create Multiple Dummy Repositories with Workflows
 
 on:
   workflow_dispatch:  # Allows manual trigger
@@ -16,28 +16,15 @@ jobs:
           git config --global user.email "lalittanysudhakar@gmail.com"
           git config --global user.name "lalitsudhakar"
 
-      - name: Create Multiple Dummy Repositories
+      - name: Create Multiple Repositories with Workflows
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
           ORG_NAME: "lalitsudhakar"
         run: |
-          for i in $(seq 1 5); do  # Change 5 to any number of repos you need
-            REPO_NAME="dummy-repo-$i"
+          REPO_NAMES=("finance" "analytics" "automation" "security" "java" "python" "business" "marketing")
+
+          for REPO_NAME in "${REPO_NAMES[@]}"; do
             echo "Processing repository: $REPO_NAME"
-
-            # Delete the repo if it exists
-            response=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE \
-              -H "Authorization: token $GH_TOKEN" \
-              -H "Accept: application/vnd.github.v3+json" \
-              https://api.github.com/repos/$ORG_NAME/$REPO_NAME)
-
-            if [[ "$response" == "204" ]]; then
-              echo "Existing repository $REPO_NAME deleted successfully."
-            else
-              echo "No existing repository found or failed to delete $REPO_NAME."
-            fi
-
-            sleep 2
 
             # Create a new repository
             curl -X POST -H "Authorization: token $GH_TOKEN" \
@@ -47,15 +34,45 @@ jobs:
 
             sleep 2
 
-            # Initialize repository and add branches
+            # Clone the repository
             git clone https://$GH_TOKEN@github.com/$ORG_NAME/$REPO_NAME.git
             cd $REPO_NAME
 
+            # Create a dummy Python script
             echo 'print("Hello from Dummy Repo")' > main.py
             git add main.py
             git commit -m "Add dummy Python script"
+
+            # Create GitHub Actions workflow
+            mkdir -p .github/workflows
+            cat <<EOL > .github/workflows/main.yml
+name: CI for $REPO_NAME
+
+on:
+  push:
+    branches:
+      - main
+      - Test-Github
+      - Docker-Dev
+      - Prod
+      - Stage
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Run a simple script
+        run: echo "Building $REPO_NAME on branch \$(git branch --show-current)"
+EOL
+
+            git add .github/workflows/main.yml
+            git commit -m "Add CI workflow for $REPO_NAME"
             git push origin main
 
+            # Create and push additional branches
             for branch in "Test-Github" "Docker-Dev" "Prod" "Stage"; do
               git checkout -b $branch
               git push origin $branch
