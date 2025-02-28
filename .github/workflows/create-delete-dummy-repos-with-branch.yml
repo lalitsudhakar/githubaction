@@ -1,4 +1,4 @@
-name: Create Repositories with Workflows
+name: Create Multiple Dummy Repositories
 
 on:
   workflow_dispatch:  # Allows manual trigger
@@ -8,63 +8,59 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
       - name: Setup Git Config
         run: |
           git config --global user.email "lalittanysudhakar@gmail.com"
           git config --global user.name "lalitsudhakar"
 
-      - name: Create Repositories
+      - name: Create Multiple Dummy Repositories
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
           ORG_NAME: "lalitsudhakar"
         run: |
-          REPOS=("finance" "analytics" "automation" "security" "java" "python" "business" "marketing")
+          for i in $(seq 1 5); do  # Change 5 to any number of repos you need
+            REPO_NAME="dummy-repo-$i"
+            echo "Processing repository: $REPO_NAME"
 
-          for REPO in "${REPOS[@]}"; do
-            echo "Creating repository: $REPO"
-            
-            # Create the repository
-            RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+            # Delete the repo if it exists
+            response=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE \
               -H "Authorization: token $GH_TOKEN" \
               -H "Accept: application/vnd.github.v3+json" \
-              https://api.github.com/user/repos \
-              -d "{\"name\": \"$REPO\", \"private\": false}")
+              https://api.github.com/repos/$ORG_NAME/$REPO_NAME)
 
-            if [[ "$RESPONSE" != "201" ]]; then
-              echo "❌ Error creating repo: $REPO (HTTP $RESPONSE)"
-              continue
+            if [[ "$response" == "204" ]]; then
+              echo "Existing repository $REPO_NAME deleted successfully."
+            else
+              echo "No existing repository found or failed to delete $REPO_NAME."
             fi
 
             sleep 2
 
-            # Clone, add files, and push
-            git clone https://$GH_PAT@github.com/$ORG_NAME/$REPO.git && cd $REPO
+            # Create a new repository
+            curl -X POST -H "Authorization: token $GH_TOKEN" \
+              -H "Accept: application/vnd.github.v3+json" \
+              https://api.github.com/user/repos \
+              -d '{"name": "'"$REPO_NAME"'", "private": false}'
 
-            # Add a dummy Python script
+            sleep 2
+
+            # Initialize repository and add branches
+            git clone https://$GH_TOKEN@github.com/$ORG_NAME/$REPO_NAME.git
+            cd $REPO_NAME
+
             echo 'print("Hello from Dummy Repo")' > main.py
             git add main.py
-            git commit -m "Added dummy Python script"
+            git commit -m "Add dummy Python script"
             git push origin main
 
-            # Add GitHub Actions workflow
-            mkdir -p .github/workflows
-            echo "name: CI for $REPO
-
-on: [push]
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
-      - name: Run Script
-        run: echo \"Building $REPO\"" > .github/workflows/main.yml
-
-            git add .github/workflows/main.yml
-            git commit -m "Added workflow for $REPO"
-            git push origin main
+            for branch in "Test-Github" "Docker-Dev" "Prod" "Stage"; do
+              git checkout -b $branch
+              git push origin $branch
+            done
 
             cd ..
-            rm -rf $REPO  # Clean up local repo
+            rm -rf $REPO_NAME  # Clean up local repo
           done
