@@ -1,4 +1,4 @@
-name: Create Multiple Dummy Repositories with Workflows
+name: Create Repositories with Workflows
 
 on:
   workflow_dispatch:  # Allows manual trigger
@@ -8,79 +8,63 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v3
-
       - name: Setup Git Config
         run: |
           git config --global user.email "lalittanysudhakar@gmail.com"
           git config --global user.name "lalitsudhakar"
 
-      - name: Create Multiple Repositories with Workflows
+      - name: Create Repositories
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT }}  # Ensure PAT has `repo` scope
+          GH_TOKEN: ${{ secrets.GH_PAT }}
           ORG_NAME: "lalitsudhakar"
         run: |
-          REPO_NAMES=("finance" "analytics" "automation" "security" "java" "python" "business" "marketing")
+          REPOS=("finance" "analytics" "automation" "security" "java" "python" "business" "marketing")
 
-          for REPO_NAME in "${REPO_NAMES[@]}"; do
-            echo "Processing repository: $REPO_NAME"
-
-            # Create a new repository
-            curl -X POST -H "Authorization: token $GH_TOKEN" \
+          for REPO in "${REPOS[@]}"; do
+            echo "Creating repository: $REPO"
+            
+            # Create the repository
+            RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+              -H "Authorization: token $GH_TOKEN" \
               -H "Accept: application/vnd.github.v3+json" \
               https://api.github.com/user/repos \
-              -d "{\"name\": \"$REPO_NAME\", \"private\": false}"
+              -d "{\"name\": \"$REPO\", \"private\": false}")
+
+            if [[ "$RESPONSE" != "201" ]]; then
+              echo "❌ Error creating repo: $REPO (HTTP $RESPONSE)"
+              continue
+            fi
 
             sleep 2
 
-            # Clone the repository
-            git clone https://$GH_PAT@github.com/$ORG_NAME/$REPO_NAME.git
-            cd $REPO_NAME
+            # Clone, add files, and push
+            git clone https://$GH_PAT@github.com/$ORG_NAME/$REPO.git && cd $REPO
 
-            # Create a dummy Python script
+            # Add a dummy Python script
             echo 'print("Hello from Dummy Repo")' > main.py
             git add main.py
-            git commit -m "Add dummy Python script"
+            git commit -m "Added dummy Python script"
             git push origin main
 
-            # Create GitHub Actions workflow directory
+            # Add GitHub Actions workflow
             mkdir -p .github/workflows
+            echo "name: CI for $REPO
 
-            # Use EOF syntax to correctly format YAML in the workflow file
-            cat <<EOF > .github/workflows/main.yml
-name: CI for $REPO_NAME
-
-on:
-  push:
-    branches:
-      - main
-      - Test-Github
-      - Docker-Dev
-      - Prod
-      - Stage
+on: [push]
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
-
-      - name: Run a simple script
-        run: echo "Building $REPO_NAME on branch \$(git rev-parse --abbrev-ref HEAD)"
-EOF
+      - name: Run Script
+        run: echo \"Building $REPO\"" > .github/workflows/main.yml
 
             git add .github/workflows/main.yml
-            git commit -m "Add CI workflow for $REPO_NAME"
+            git commit -m "Added workflow for $REPO"
             git push origin main
 
-            # Create and push additional branches
-            for branch in "Test-Github" "Docker-Dev" "Prod" "Stage"; do
-              git checkout -b $branch
-              git push origin $branch
-            done
-
             cd ..
-            rm -rf $REPO_NAME  # Clean up local repo
+            rm -rf $REPO  # Clean up local repo
+          done
