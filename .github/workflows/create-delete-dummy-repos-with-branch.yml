@@ -42,13 +42,14 @@ jobs:
             echo 'print("Hello from Dummy Repo")' > main.py
             git add main.py
             git commit -m "Add dummy Python script"
+            git push origin main
 
             # Create GitHub Actions workflow directory
             mkdir -p .github/workflows
 
-            # Create workflow file with correct YAML indentation
-            cat << 'EOL' > .github/workflows/main.yml
-name: CI for ${REPO_NAME}
+            # Create workflow file with proper YAML syntax
+            cat > .github/workflows/main.yml <<EOL
+name: CI for $REPO_NAME
 
 on:
   push:
@@ -67,7 +68,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Run a simple script
-        run: echo "Building ${REPO_NAME} on branch $(git rev-parse --abbrev-ref HEAD)"
+        run: echo "Building $REPO_NAME on branch \$(git rev-parse --abbrev-ref HEAD)"
 EOL
 
             git add .github/workflows/main.yml
